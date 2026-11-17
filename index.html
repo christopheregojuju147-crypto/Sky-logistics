@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SwiftShip Logistics - Track Your Package</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif}
+  body{background:#f4f6f8;color:#111}
+  header{background:#0b2a4a;color:#fff;padding:20px;text-align:center}
+  header h1{font-size:28px}
+  header p{opacity:.8;margin-top:5px}
+  .container{max-width:900px;margin:20px auto;padding:0 15px}
+  .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,.08);margin-bottom:20px}
+  h2{margin-bottom:15px;color:#0b2a4a}
+  input,select,textarea{width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px;font-size:15px}
+  button{background:#ff6b00;color:#fff;border:none;padding:13px 20px;border-radius:8px;font-size:16px;cursor:pointer;width:100%;font-weight:bold}
+  button:hover{background:#e65c00}
+  .btn-dark{background:#0b2a4a}
+  .btn-red{background:#d32f2f}
+  .btn-green{background:#2e7d32}
+  .tracking-result{margin-top:15px;padding:15px;background:#eef7ff;border-radius:10px;display:none}
+  .timeline{margin-top:15px;border-left:3px solid #0b2a4a;padding-left:15px}
+  .step{margin-bottom:15px}
+  .step b{display:block}
+  .step span{color:#666;font-size:13px}
+  .badge{display:inline-block;padding:5px 10px;border-radius:20px;background:#ff6b00;color:#fff;font-size:12px;font-weight:bold}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+  @media(max-width:600px){.grid{grid-template-columns:1fr}}
+  footer{text-align:center;padding:20px;color:#888;font-size:13px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;max-width:900px;margin:10px auto;padding:0 15px}
+  .topbar a{color:#0b2a4a;font-weight:bold;cursor:pointer;text-decoration:underline}
+  .admin-shipment{border:1px solid #eee;border-radius:10px;padding:15px;margin-bottom:15px}
+  .flex{display:flex;gap:10px}
+  .flex button{padding:10px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚚 SwiftShip Logistics</h1>
+  <p>Fast • Secure • Worldwide Shipping</p>
+</header>
+
+<div class="topbar">
+  <span id="adminStatus">Guest Mode</span>
+  <a onclick="showAdminLogin()">Admin Login</a>
+</div>
+
+<div class="container">
+
+  <!-- TRACKING -->
+  <div class="card">
+    <h2>Track Your Shipment</h2>
+    <input type="text" id="trackInput" placeholder="Enter Tracking Code e.g. SS123456789">
+    <button onclick="trackPackage()">Track Package</button>
+    <div id="trackResult" class="tracking-result"></div>
+  </div>
+
+  <!-- CREATE SHIPMENT -->
+  <div class="card">
+    <h2>Create New Shipment</h2>
+    <div class="grid">
+      <input type="text" id="sender" placeholder="Sender Name">
+      <input type="text" id="receiver" placeholder="Receiver Name">
+      <input type="text" id="fromCity" placeholder="From City / Country">
+      <input type="text" id="toCity" placeholder="To City / Country">
+    </div>
+    <select id="service">
+      <option value="Standard - 5-7 Days - $15">Standard - 5-7 Days - $15</option>
+      <option value="Express - 2-3 Days - $35">Express - 2-3 Days - $35</option>
+      <option value="Overnight - 1 Day - $60">Overnight - 1 Day - $60</option>
+    </select>
+    <input type="number" id="weight" placeholder="Weight (kg)">
+    <textarea id="desc" placeholder="Package Description"></textarea>
+    <button onclick="createShipment()">Generate Tracking Code</button>
+    <div id="createResult" class="tracking-result"></div>
+  </div>
+
+  <!-- ADMIN LOGIN -->
+  <div class="card" id="adminLoginCard" style="display:none">
+    <h2>🔐 Admin Login</h2>
+    <input type="text" id="adminUser" placeholder="Username - admin">
+    <input type="password" id="adminPass" placeholder="Password - admin123">
+    <button class="btn-dark" onclick="adminLogin()">Login as Admin</button>
+    <p style="margin-top:10px;font-size:13px;color:#888">Demo: admin / admin123</p>
+  </div>
+
+  <!-- ADMIN PANEL -->
+  <div class="card" id="adminPanel" style="display:none">
+    <h2>⚙️ Admin Panel</h2>
+    <p style="margin-bottom:15px">Logged in as <b>Admin</b> | Total Shipments: <b id="totalCount">0</b></p>
+    <input type="text" id="adminSearch" placeholder="Search by tracking code, receiver, city..." oninput="renderAdmin()">
+    <div id="adminList"></div>
+    <button class="btn-red" onclick="adminLogout()">Logout</button>
+  </div>
+
+  <!-- ALL SHIPMENTS -->
+  <div class="card">
+    <h2>All Shipments</h2>
+    <div id="allShipments"><p>No shipments yet.</p></div>
+  </div>
+
+</div>
+
+<footer>© 2026 SwiftShip Logistics | Demo - Data saved in browser</footer>
+
+<script>
+let shipments = JSON.parse(localStorage.getItem('shipments') || '{}');
+let isAdmin = localStorage.getItem('isAdmin') === 'true';
+
+function save(){ localStorage.setItem('shipments', JSON.stringify(shipments)); }
+function generateCode(){ return 'SS' + Math.floor(100000000 + Math.random()*900000000); }
+
+function createShipment(){
+  const sender = document.getElementById('sender').value.trim();
+  const receiver = document.getElementById('receiver').value.trim();
+  const from = document.getElementById('fromCity').value.trim();
+  const to = document.getElementById('toCity').value.trim();
+  const service = document.getElementById('service').value;
+  const weight = document.getElementById('weight').value;
+  const desc = document.getElementById('desc').value.trim();
+  if(!sender || !receiver || !from || !to){ alert('Fill Sender, Receiver, From and To'); return; }
+  const code = generateCode();
+  const now = new Date().toLocaleString();
+  shipments[code] = { sender, receiver, from, to, service, weight, desc, status:'Package Received', history:[{status:'Package Received', location:from, time:now}], created:now };
+  save();
+  const box = document.getElementById('createResult');
+  box.style.display='block';
+  box.innerHTML = `<h3>✅ Shipment Created!</h3><p><b>Tracking Code:</b> <span style="font-size:20px;color:#ff6b00">${code}</span></p><p><b>From:</b> ${from} → <b>To:</b> ${to}</p><p><b>Receiver:</b> ${receiver}</p><button onclick="copyCode('${code}')" style="margin-top:10px;background:#0b2a4a">Copy Tracking Code</button>`;
+  renderAll(); renderAdmin();
+}
+
+function trackPackage(){
+  const code = document.getElementById('trackInput').value.trim().toUpperCase();
+  const box = document.getElementById('trackResult');
+  box.style.display='block';
+  if(!shipments[code]){ box.innerHTML = `<p>❌ No shipment found for <b>${code}</b>. Try demo: <b>SS123456789</b></p>`; return; }
+  const s = shipments[code];
+  let timeline = s.history.map(h=>`<div class="step"><b>${h.status}</b><span>${h.location} • ${h.time}</span></div>`).join('');
+  box.innerHTML = `<span class="badge">${s.status}</span><p style="margin-top:10px"><b>Tracking:</b> ${code}</p><p><b>Sender:</b> ${s.sender} (${s.from})</p><p><b>Receiver:</b> ${s.receiver} (${s.to})</p><p><b>Service:</b> ${s.service} | <b>Weight:</b> ${s.weight||'-'} kg</p><p><b>Description:</b> ${s.desc||'-'}</p><div class="timeline">${timeline}</div>`;
+}
+
+function copyCode(code){ navigator.clipboard.writeText(code); alert('Copied: '+code); }
+
+function renderAll(){
+  const div = document.getElementById('allShipments');
+  const codes = Object.keys(shipments);
+  if(codes.length===0){ div.innerHTML='<p>No shipments yet.</p>'; return; }
+  div.innerHTML = codes.map(code=>{
+    const s=shipments[code];
+    return `<div style="padding:12px;border:1px solid #eee;border-radius:8px;margin-bottom:10px"><b>${code}</b> - ${s.from} → ${s.to} <span class="badge" style="float:right">${s.status}</span><br><small>Receiver: ${s.receiver} | ${s.service}</small><br><button onclick="document.getElementById('trackInput').value='${code}';trackPackage();window.scrollTo(0,0)" style="margin-top:8px;padding:8px">View Tracking</button></div>`;
+  }).join('');
+}
+
+// ===== ADMIN =====
+function showAdminLogin(){
+  if(isAdmin){ document.getElementById('adminPanel').scrollIntoView(); return; }
+  document.getElementById('adminLoginCard').style.display='block';
+  document.getElementById('adminLoginCard').scrollIntoView();
+}
+
+function adminLogin(){
+  const u = document.getElementById('adminUser').value.trim();
+  const p = document.getElementById('adminPass').value.trim();
+  // CHANGE PASSWORD HERE
+  if(u==='admin' && p==='admin123'){
+    isAdmin=true; localStorage.setItem('isAdmin','true');
+    updateAdminUI(); alert('Welcome Admin!');
+  } else { alert('Wrong username or password'); }
+}
+
+function adminLogout(){
+  isAdmin=false; localStorage.removeItem('isAdmin');
+  updateAdminUI();
+}
+
+function updateAdminUI(){
+  document.getElementById('adminStatus').textContent = isAdmin ? '✅ Logged in as Admin' : 'Guest Mode';
+  document.getElementById('adminPanel').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('adminLoginCard').style.display = 'none';
+  renderAdmin();
+}
+
+function renderAdmin(){
+  if(!isAdmin) return;
+  const search = (document.getElementById('adminSearch').value||'').toLowerCase();
+  document.getElementById('totalCount').textContent = Object.keys(shipments).length;
+  const div = document.getElementById('adminList');
+  const codes = Object.keys(shipments).filter(code=>{
+    const s=shipments[code];
+    return (code+s.receiver+s.sender+s.from+s.to).toLowerCase().includes(search);
+  });
+  if(codes.length===0){ div.innerHTML='<p>No shipments found.</p>'; return; }
+  div.innerHTML = codes.map(code=>{
+    const s=shipments[code];
+    return `<div class="admin-shipment">
+      <b>${code}</b> - ${s.sender} → ${s.receiver}<br>
+      <small>${s.from} → ${s.to} | ${s.service}</small><br><br>
+      <label>Update Status:</label>
+      <select id="status-${code}">
+        <option ${s.status==='Package Received'?'selected':''}>Package Received</option>
+        <option ${s.status==='In Transit'?'selected':''}>In Transit</option>
+        <option ${s.status==='Arrived at Facility'?'selected':''}>Arrived at Facility</option>
+        <option ${s.status==='Out for Delivery'?'selected':''}>Out for Delivery</option>
+        <option ${s.status==='Delivered'?'selected':''}>Delivered</option>
+        <option ${s.status==='On Hold'?'selected':''}>On Hold</option>
+        <option ${s.status==='Cancelled'?'selected':''}>Cancelled</option>
+      </select>
+      <input type="text" id="loc-${code}" placeholder="Location e.g. Port Harcourt Hub" value="${s.to}">
+      <div class="flex">
+        <button class="btn-green" onclick="updateStatus('${code}')">Update Status</button>
+        <button class="btn-red" onclick="deleteShipment('${code}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateStatus(code){
+  const newStatus = document.getElementById('status-'+code).value;
+  const loc = document.getElementById('loc-'+code).value || shipments[code].to;
+  const now = new Date().toLocaleString();
+  shipments[code].status = newStatus;
+  shipments[code].history.push({status:newStatus, location:loc, time:now});
+  save(); renderAll(); renderAdmin();
+  alert(code + ' updated to: ' + newStatus);
+}
+
+function deleteShipment(code){
+  if(!confirm('Delete '+code+'?')) return;
+  delete shipments[code]; save(); renderAll(); renderAdmin();
+}
+
+// Demo shipment
+if(!shipments['SS123456789']){
+  shipments['SS123456789'] = { sender:'John Doe', receiver:'Ada Eze', from:'Lagos, Nigeria', to:'Port Harcourt, Nigeria', service:'Express - 2-3 Days - $35', weight:'2.5', desc:'Documents', status:'In Transit', history:[{status:'Package Received', location:'Lagos, Nigeria', time:'Nov 17, 2026'},{status:'In Transit', location:'Sorting Facility - Lagos', time:'Nov 17, 2026'}], created:'Nov 17, 2026' };
+  save();
+}
+renderAll(); updateAdminUI();
+</script>
+</body>
+</html>
